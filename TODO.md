@@ -35,16 +35,7 @@ The entire tool is a ~190-line Python script built as an f-string (`run.py:104-2
 
 ## Skill deduplication
 
-Skills exist in 3 separate locations with no single source of truth:
-
-1. `skills/` — plugin root (used by `claude --plugin-dir`)
-2. `.claude/skills/` — repo-local (used when developing this plugin itself)
-3. `packages/nbdev-mcp/src/nbdev_mcp/assets/` — bundled in PyPI package (used by `init`)
-
-- [ ] **Pick one canonical location** and derive the others. Options:
-  - Make `skills/` the source of truth, symlink `.claude/skills/` to it, and have a build/sync step for `assets/`
-  - Or remove `.claude/skills/` entirely since this repo should use its own plugin system
-- [ ] **Verify content is identical** across all 3 copies — they may have already diverged
+- [x] **`skills/` is the single canonical location** — loaded by the plugin system at runtime via `claude --plugin-dir`. `.claude/skills/` has been removed (was non-spec); `assets/skill` and `assets/fastcore-skill` have been removed since `init` no longer vendors skills into projects. Content was verified identical before removal.
 
 ## Testing
 
@@ -89,22 +80,23 @@ Plugin structure is in place. Remaining:
 
 - [x] ~~`init` doesn't install the fastcore skill — only the nbdev skill is in assets~~
 - [x] ~~`init` has a bug: `while` condition contradicts itself (always false)~~
-- [ ] `init` doesn't validate that the target is actually an nbdev project (no check for `settings.ini` or `nbs/`)
+- [x] **`init` refactored to spec**: no longer vendors skills, hooks, or `settings.json`. Now only writes project-specific config (`.claude/CLAUDE.md`, `.mcp.json`, `pyproject.toml`, `.gitignore`). Skills and hooks are provided by the plugin at load time.
+- [x] `init` validates that the target is actually an nbdev project (`settings.ini` or `nbs/` check)
+- [x] `--no-jupyter` flag added — skips jupyter-mcp MCP server and pyproject dependency group
+- [x] `_patch_pyproject` section-header detection fixed — uses regex to avoid matching TOML array literals
 - [ ] No `uninstall` or `update` command — if the plugin evolves, users have no clean upgrade path
-- [ ] `init` always installs jupyter-mcp config even if the user doesn't want live collaboration — add `--no-jupyter` flag
-- [ ] `_patch_pyproject` section-header detection (`init.py:161`) may match TOML array literals (`[item]`) as section headers
 
 ## MCP server
 
-- [ ] No error handling around `mcp.run()` in `cli.py` — if FastMCP fails to start, the error may be opaque
+- [x] ~~No error handling around `mcp.run()` in `cli.py`~~ — now wrapped with try/except and clear stderr message
 - [ ] No logging — hard to debug when tools return unexpected results
-- [ ] `range` parameter shadows the Python built-in in `server.py` tool signatures (`nb_read`, `nb_run`) — `read.py` works around this with `_range = range` but it's fragile
+- [x] ~~`range` parameter shadows the Python built-in~~ — renamed to `cell_range` in `nb_read` and `nb_run`
 
 ## CLAUDE.md template
 
-- [ ] Template says "This is an nbdev project" but it's installed into every project regardless
-- [ ] Template references paths like `nbs/` which may not match the target project's `nbs_path` setting
-- [ ] Template should be parameterized by `init` (at minimum: lib name, nbs path)
+- [x] ~~Template says "This is an nbdev project" but it's installed into every project regardless~~ — now says "This is the `{{LIB_NAME}}` nbdev project"
+- [x] ~~Template references paths like `nbs/`~~ — now uses `{{NBS_PATH}}` placeholder, substituted from `settings.ini` by `init`
+- [x] ~~Template should be parameterized by `init`~~ — `init` reads `lib_name` and `nbs_path` from `settings.ini` and substitutes both placeholders before writing
 
 ## Documentation & CI/CD
 

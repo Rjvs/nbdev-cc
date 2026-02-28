@@ -1,23 +1,27 @@
-"""Project setup — install nbdev plugin into a target project.
+"""Configure a project for use with the nbdev Claude Code plugin.
 
-Copies skill, CLAUDE.md, hooks from bundled package assets. Patches
-.mcp.json, pyproject.toml, and .gitignore. Replaces the old
-setup_jupyter_agent.py template system.
+Writes project-specific config that cannot come from the plugin itself:
+  - .claude/CLAUDE.md  — parameterized with lib name and nbs path
+  - .mcp.json          — MCP server config (nbdev + optionally jupyter-mcp)
+  - pyproject.toml     — jupyter dependency group (unless --no-jupyter)
+  - .gitignore         — jupyter.log, .claude/.last-nb-read
+
+Skills and hooks are provided by the plugin at load time via
+`claude --plugin-dir path/to/nbdev-cc` and are NOT copied into the project.
 
 Usage:
     nbdev-mcp init /path/to/project
     nbdev-mcp init /path/to/project --dry-run
     nbdev-mcp init /path/to/project --force
+    nbdev-mcp init /path/to/project --no-jupyter
 """
 
 import argparse
 import json
 import os
-import shutil
 import sys
 import textwrap
 from importlib import resources
-from pathlib import Path
 
 
 MCP_CONFIG = {
@@ -50,22 +54,6 @@ JUPYTER_DEPS = textwrap.dedent("""\
 
 GITIGNORE_ENTRIES = ['jupyter.log', '.claude/.last-nb-read']
 
-# What to copy from package assets to target project
-ASSET_COPIES = [
-    # (source path relative to assets/, dest path relative to project root)
-    ('skill', os.path.join('.claude', 'skills', 'nbdev')),
-    ('fastcore-skill', os.path.join('.claude', 'skills', 'fastcore')),
-    ('CLAUDE.md', os.path.join('.claude', 'CLAUDE.md')),
-    ('settings.json', os.path.join('.claude', 'settings.json')),
-    (os.path.join('hooks', 'session-start.sh'), os.path.join('.claude', 'hooks', 'session-start.sh')),
-    (os.path.join('hooks', 'auto-read-notebooks.sh'), os.path.join('.claude', 'hooks', 'auto-read-notebooks.sh')),
-]
-
-EXECUTABLE_FILES = [
-    os.path.join('.claude', 'hooks', 'session-start.sh'),
-    os.path.join('.claude', 'hooks', 'auto-read-notebooks.sh'),
-]
-
 
 def _log(msg, dry_run=False):
     prefix = '[dry-run] ' if dry_run else ''
@@ -77,34 +65,43 @@ def _assets_path():
     return resources.files('nbdev_mcp') / 'assets'
 
 
-def _copy_asset_tree(src_traversable, dst, force=False, dry_run=False):
-    """Copy a directory tree from package resources to filesystem."""
-    if src_traversable.is_file():
-        _copy_asset_file(src_traversable, dst, force=force, dry_run=dry_run)
-        return
+def _read_settings(project_dir):
+    """Read lib_name and nbs_path from settings.ini; return defaults if absent."""
+    lib_name = 'mylib'
+    nbs_path = 'nbs'
+    settings_path = os.path.join(project_dir, 'settings.ini')
+    if not os.path.exists(settings_path):
+        return lib_name, nbs_path
+    with open(settings_path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, _, val = line.partition('=')
+            key, val = key.strip(), val.strip()
+            if key == 'lib_name':
+                lib_name = val
+            elif key == 'nbs_path':
+                nbs_path = val
+    return lib_name, nbs_path
 
-    for item in src_traversable.iterdir():
-        item_dst = os.path.join(dst, item.name)
-        if item.is_dir():
-            _copy_asset_tree(item, item_dst, force=force, dry_run=dry_run)
-        else:
-            _copy_asset_file(item, item_dst, force=force, dry_run=dry_run)
 
-
-def _copy_asset_file(src_traversable, dst, force=False, dry_run=False):
-    """Copy a single file from package resources to filesystem."""
-    exists = os.path.exists(dst)
-    if exists and not force:
+def _patch_claude_md(project_dir, force=False, dry_run=False):
+    """Write .claude/CLAUDE.md with lib_name and nbs_path substituted."""
+    dst = os.path.join(project_dir, '.claude', 'CLAUDE.md')
+    if os.path.exists(dst) and not force:
         _log(f'skip (exists): {dst}', dry_run)
         return
 
-    verb = 'overwrite' if exists else 'copy'
-    _log(f'{verb}: {dst}', dry_run)
+    lib_name, nbs_path = _read_settings(project_dir)
+    verb = 'overwrite' if os.path.exists(dst) else 'create'
+    _log(f'{verb}: {dst}  (lib={lib_name}, nbs={nbs_path})', dry_run)
 
     if not dry_run:
+        template = (_assets_path() / 'CLAUDE.md').read_text()
+        content = template.replace('{{LIB_NAME}}', lib_name).replace('{{NBS_PATH}}', nbs_path)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        content = src_traversable.read_bytes()
-        with open(dst, 'wb') as f:
+        with open(dst, 'w') as f:
             f.write(content)
 
 
@@ -139,6 +136,8 @@ def _write_mcp_json(project_dir, force=False, dry_run=False, no_jupyter=False):
 
 def _patch_pyproject(project_dir, dry_run=False):
     """Add jupyter dependency group to pyproject.toml if not present."""
+    import re as _re
+
     path = os.path.join(project_dir, 'pyproject.toml')
     if not os.path.exists(path):
         _log(f'skip: {path} not found (create it first)', dry_run)
@@ -154,10 +153,8 @@ def _patch_pyproject(project_dir, dry_run=False):
     if '[dependency-groups]' in content:
         _log(f'patch: add jupyter group to {path}', dry_run)
         if not dry_run:
-            import re as _re
-            # A TOML section header is a line whose non-whitespace content is
-            # [name] or [[name]] — not an array literal which starts inside
-            # a value position. We match only top-level section lines.
+            # A TOML section header is [name] or [[name]] on its own line —
+            # not an array literal inside a value. Match only section lines.
             _section_re = _re.compile(r'^\s*\[\[?[A-Za-z0-9_\-.]+\]?\]\s*$')
             lines = content.split('\n')
             for i, line in enumerate(lines):
@@ -189,7 +186,7 @@ def _patch_pyproject(project_dir, dry_run=False):
 
 
 def _patch_gitignore(project_dir, dry_run=False):
-    """Add jupyter.log to .gitignore if not present."""
+    """Add jupyter.log and .claude/.last-nb-read to .gitignore if not present."""
     path = os.path.join(project_dir, '.gitignore')
     if not os.path.exists(path):
         _log(f'create: {path}', dry_run)
@@ -209,7 +206,7 @@ def _patch_gitignore(project_dir, dry_run=False):
     _log(f'patch: add {", ".join(to_add)} to {path}', dry_run)
     if not dry_run:
         with open(path, 'a') as f:
-            f.write('\n# Jupyter MCP collaboration\n')
+            f.write('\n# nbdev-mcp\n')
             for entry in to_add:
                 f.write(entry + '\n')
 
@@ -219,7 +216,6 @@ def _is_nbdev_project(project_dir):
     has_settings = os.path.exists(os.path.join(project_dir, 'settings.ini'))
     has_nbs = os.path.isdir(os.path.join(project_dir, 'nbs'))
     has_pyproject = os.path.exists(os.path.join(project_dir, 'pyproject.toml'))
-    # Accept if settings.ini exists OR if both nbs/ and pyproject.toml exist
     return has_settings or (has_nbs and has_pyproject)
 
 
@@ -227,7 +223,7 @@ def run_init(argv):
     """Run the init command."""
     parser = argparse.ArgumentParser(
         prog='nbdev-mcp init',
-        description='Install nbdev plugin into a project.',
+        description='Configure a project for use with the nbdev Claude Code plugin.',
     )
     parser.add_argument('project', help='Path to the target project root')
     parser.add_argument('--force', action='store_true',
@@ -249,44 +245,27 @@ def run_init(argv):
             f'(no settings.ini or nbs/ directory found).',
             file=sys.stderr,
         )
-        print('Continuing anyway — pass --force to suppress this warning next time.', file=sys.stderr)
 
-    print(f'Installing nbdev plugin into {project}', file=sys.stderr)
+    print(f'Configuring nbdev plugin for {project}', file=sys.stderr)
     if args.dry_run:
         print('(dry run — no changes will be made)\n', file=sys.stderr)
 
-    # Copy assets from package
-    assets = _assets_path()
-    for src_rel, dst_rel in ASSET_COPIES:
-        src = assets / src_rel.replace(os.sep, '/')
-        dst = os.path.join(project, dst_rel)
-        _copy_asset_tree(src, dst, force=args.force, dry_run=args.dry_run)
-
-    # Set executable permissions
-    for rel_path in EXECUTABLE_FILES:
-        path = os.path.join(project, rel_path)
-        if os.path.exists(path) and not args.dry_run:
-            os.chmod(path, 0o755)
-
-    # Create/merge .mcp.json (optionally skip jupyter-mcp server)
+    _patch_claude_md(project, force=args.force, dry_run=args.dry_run)
     _write_mcp_json(project, force=args.force, dry_run=args.dry_run,
                     no_jupyter=args.no_jupyter)
 
-    # Patch pyproject.toml (optionally skip jupyter dependency group)
     if not args.no_jupyter:
         _patch_pyproject(project, dry_run=args.dry_run)
     else:
         _log('skip: jupyter dependency group (--no-jupyter)', args.dry_run)
 
-    # Patch .gitignore
     _patch_gitignore(project, dry_run=args.dry_run)
 
     if not args.dry_run:
         print(f'\nDone. Next steps:', file=sys.stderr)
-        print(f'  1. Edit .claude/CLAUDE.md to match your project', file=sys.stderr)
+        print(f'  1. Review .claude/CLAUDE.md and adjust for your project', file=sys.stderr)
+        print(f'  2. Load the plugin: claude --plugin-dir path/to/nbdev-cc', file=sys.stderr)
         if not args.no_jupyter:
-            print(f'  2. uv sync --group jupyter', file=sys.stderr)
-            print(f'  3. Start JupyterLab and set JUPYTER_TOKEN', file=sys.stderr)
-            print(f'  4. Run: claude  (with JUPYTER_TOKEN in env)', file=sys.stderr)
-        else:
-            print(f'  2. Run: claude', file=sys.stderr)
+            print(f'  3. uv sync --group jupyter', file=sys.stderr)
+            print(f'  4. Start JupyterLab and set JUPYTER_TOKEN', file=sys.stderr)
+            print(f'  5. Run: JUPYTER_TOKEN=... claude --plugin-dir path/to/nbdev-cc', file=sys.stderr)
