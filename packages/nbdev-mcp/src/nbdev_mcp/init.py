@@ -11,9 +11,10 @@ Usage:
 """
 
 import argparse
+import configparser
 import json
 import os
-import shutil
+import re
 import sys
 import textwrap
 from importlib import resources
@@ -48,7 +49,7 @@ JUPYTER_DEPS = textwrap.dedent("""\
     ]
 """)
 
-GITIGNORE_ENTRIES = ['jupyter.log', '.claude/.last-nb-read']
+GITIGNORE_ENTRIES = ['jupyter.log', '.claude/.last-nb-read', '.claude/.session-setup-done']
 
 # What to copy from package assets to target project
 ASSET_COPIES = [
@@ -61,10 +62,20 @@ ASSET_COPIES = [
     (os.path.join('hooks', 'auto-read-notebooks.sh'), os.path.join('.claude', 'hooks', 'auto-read-notebooks.sh')),
 ]
 
+# Files that need template variable substitution
+TEMPLATE_FILES = {
+    os.path.join('.claude', 'CLAUDE.md'),
+}
+
 EXECUTABLE_FILES = [
     os.path.join('.claude', 'hooks', 'session-start.sh'),
     os.path.join('.claude', 'hooks', 'auto-read-notebooks.sh'),
 ]
+
+# Regex matching a TOML section header (e.g. [project]) but NOT an
+# inline array literal (e.g. dependencies = ["foo"]).  A section header
+# starts at column 0 with `[` followed by a bare key, not `"` or `'`.
+_TOML_SECTION_RE = re.compile(r'^\[([A-Za-z0-9._-]+)\]\s*$')
 
 
 def _log(msg, dry_run=False):
@@ -77,21 +88,48 @@ def _assets_path():
     return resources.files('nbdev_mcp') / 'assets'
 
 
-def _copy_asset_tree(src_traversable, dst, force=False, dry_run=False):
+def _detect_project_settings(project_dir):
+    """Read settings.ini to detect lib_name and nbs_path.
+
+    Returns a dict with keys 'lib_name' and 'nbs_path', using
+    defaults when settings.ini is absent or incomplete.
+    """
+    defaults = {'lib_name': 'my_lib', 'nbs_path': 'nbs'}
+    ini_path = os.path.join(project_dir, 'settings.ini')
+    if not os.path.exists(ini_path):
+        return defaults
+
+    config = configparser.ConfigParser()
+    config.read(ini_path)
+    section = 'DEFAULT'
+    return {
+        'lib_name': config.get(section, 'lib_name', fallback=defaults['lib_name']),
+        'nbs_path': config.get(section, 'nbs_path', fallback=defaults['nbs_path']),
+    }
+
+
+def _render_template(content, settings):
+    """Replace {{NBS_PATH}} and {{LIB_NAME}} placeholders in template content."""
+    content = content.replace('{{NBS_PATH}}', settings['nbs_path'])
+    content = content.replace('{{LIB_NAME}}', settings['lib_name'])
+    return content
+
+
+def _copy_asset_tree(src_traversable, dst, force=False, dry_run=False, settings=None):
     """Copy a directory tree from package resources to filesystem."""
     if src_traversable.is_file():
-        _copy_asset_file(src_traversable, dst, force=force, dry_run=dry_run)
+        _copy_asset_file(src_traversable, dst, force=force, dry_run=dry_run, settings=settings)
         return
 
     for item in src_traversable.iterdir():
         item_dst = os.path.join(dst, item.name)
         if item.is_dir():
-            _copy_asset_tree(item, item_dst, force=force, dry_run=dry_run)
+            _copy_asset_tree(item, item_dst, force=force, dry_run=dry_run, settings=settings)
         else:
-            _copy_asset_file(item, item_dst, force=force, dry_run=dry_run)
+            _copy_asset_file(item, item_dst, force=force, dry_run=dry_run, settings=settings)
 
 
-def _copy_asset_file(src_traversable, dst, force=False, dry_run=False):
+def _copy_asset_file(src_traversable, dst, force=False, dry_run=False, settings=None):
     """Copy a single file from package resources to filesystem."""
     exists = os.path.exists(dst)
     if exists and not force:
@@ -104,6 +142,11 @@ def _copy_asset_file(src_traversable, dst, force=False, dry_run=False):
     if not dry_run:
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         content = src_traversable.read_bytes()
+
+        # Apply template substitution for CLAUDE.md and similar files
+        if settings and any(dst.endswith(t.replace(os.sep, '/')) or dst.endswith(t) for t in TEMPLATE_FILES):
+            content = _render_template(content.decode('utf-8'), settings).encode('utf-8')
+
         with open(dst, 'wb') as f:
             f.write(content)
 
@@ -137,6 +180,14 @@ def _write_mcp_json(project_dir, force=False, dry_run=False):
             f.write('\n')
 
 
+def _is_toml_section_header(line):
+    """Return True if the line is a TOML section header like [project].
+
+    Returns False for inline array literals like ``deps = ["foo"]``.
+    """
+    return bool(_TOML_SECTION_RE.match(line.strip()))
+
+
 def _patch_pyproject(project_dir, dry_run=False):
     """Add jupyter dependency group to pyproject.toml if not present."""
     path = os.path.join(project_dir, 'pyproject.toml')
@@ -158,7 +209,8 @@ def _patch_pyproject(project_dir, dry_run=False):
             for i, line in enumerate(lines):
                 if line.strip() == '[dependency-groups]':
                     j = i + 1
-                    while j < len(lines) and not (lines[j].strip().startswith('[') and lines[j].strip() != '[dependency-groups]'):
+                    # Find the next section header (skip array literals)
+                    while j < len(lines) and not _is_toml_section_header(lines[j]):
                         j += 1
                     jupyter_lines = [
                         'jupyter = [',
@@ -225,6 +277,16 @@ def run_init(argv):
         print(f'Error: {project} is not a directory', file=sys.stderr)
         sys.exit(1)
 
+    # Warn if this doesn't look like an nbdev project
+    has_settings_ini = os.path.exists(os.path.join(project, 'settings.ini'))
+    has_nbs = os.path.isdir(os.path.join(project, 'nbs'))
+    if not has_settings_ini and not has_nbs:
+        print('Warning: no settings.ini or nbs/ directory found.', file=sys.stderr)
+        print('         This may not be an nbdev project. Continuing anyway.\n', file=sys.stderr)
+
+    # Detect project settings for template rendering
+    settings = _detect_project_settings(project)
+
     print(f'Installing nbdev plugin into {project}', file=sys.stderr)
     if args.dry_run:
         print('(dry run — no changes will be made)\n', file=sys.stderr)
@@ -234,7 +296,7 @@ def run_init(argv):
     for src_rel, dst_rel in ASSET_COPIES:
         src = assets / src_rel.replace(os.sep, '/')
         dst = os.path.join(project, dst_rel)
-        _copy_asset_tree(src, dst, force=args.force, dry_run=args.dry_run)
+        _copy_asset_tree(src, dst, force=args.force, dry_run=args.dry_run, settings=settings)
 
     # Set executable permissions
     for rel_path in EXECUTABLE_FILES:
@@ -253,7 +315,7 @@ def run_init(argv):
 
     if not args.dry_run:
         print(f'\nDone. Next steps:', file=sys.stderr)
-        print(f'  1. Edit .claude/CLAUDE.md to match your project', file=sys.stderr)
+        print(f'  1. Review .claude/CLAUDE.md (paths auto-detected from settings.ini)', file=sys.stderr)
         print(f'  2. uv sync --group jupyter', file=sys.stderr)
         print(f'  3. Start JupyterLab and set JUPYTER_TOKEN', file=sys.stderr)
         print(f'  4. Run: claude  (with JUPYTER_TOKEN in env)', file=sys.stderr)

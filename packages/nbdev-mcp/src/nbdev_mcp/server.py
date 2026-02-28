@@ -3,6 +3,12 @@
 Registers all nb_* tools as MCP tools using FastMCP. Run via:
     uvx nbdev-mcp         (in .mcp.json)
     nbdev-mcp             (if installed)
+
+Note: Some tool signatures use ``range`` as a parameter name, which
+shadows the Python builtin. This is intentional — the parameter names
+are part of the MCP API exposed to clients. The wrapper functions here
+don't use the builtin ``range()``, and the implementation modules
+preserve it as ``_range = range`` where needed.
 """
 
 from mcp.server.fastmcp import FastMCP

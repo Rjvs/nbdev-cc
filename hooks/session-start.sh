@@ -3,8 +3,8 @@
 # Installs dependencies so nbdev commands, tests, and linters work in
 # Claude Code on the web.
 #
-# Copy to your project: .claude/hooks/session-start.sh
-# Register in .claude/settings.json (see template-settings.json)
+# Part of the nbdev-mcp plugin. Installed into target projects by
+# `nbdev-mcp init` (copies to .claude/hooks/session-start.sh).
 set -euo pipefail
 
 # Only run in remote (web) environments
@@ -13,6 +13,12 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
 fi
 
 cd "$CLAUDE_PROJECT_DIR"
+
+# Idempotency: skip if already run this session
+MARKER_FILE="$CLAUDE_PROJECT_DIR/.claude/.session-setup-done"
+if [ -f "$MARKER_FILE" ]; then
+  exit 0
+fi
 
 # Install uv if not present (fast Python package manager)
 if ! command -v uv &> /dev/null; then
@@ -29,11 +35,16 @@ elif [ -f "settings.ini" ] && [ -f "setup.py" ]; then
   uv pip install -e ".[dev]" 2>/dev/null || uv pip install -e .
 fi
 
-# Install nbdev and quarto if not already available
-uv pip install nbdev 2>/dev/null || true
+# Install nbdev if not already available
+if ! uv run python -c "import nbdev" 2>/dev/null; then
+  uv pip install nbdev 2>/dev/null || true
+fi
 
+# Install quarto only if the project has a _quarto.yml or docs-related config
 if ! command -v quarto &> /dev/null; then
-  uv run nbdev_install_quarto 2>/dev/null || true
+  if [ -f "_quarto.yml" ] || [ -f "nbs/_quarto.yml" ] || grep -q 'doc_path' settings.ini 2>/dev/null; then
+    uv run nbdev_install_quarto 2>/dev/null || true
+  fi
 fi
 
 # Install git hooks for notebook cleaning
@@ -44,6 +55,10 @@ uv run nbdev_export 2>/dev/null || true
 
 # Set PYTHONPATH so the library is importable
 echo "export PYTHONPATH=\"$CLAUDE_PROJECT_DIR:\$PYTHONPATH\"" >> "$CLAUDE_ENV_FILE"
+
+# Mark setup as done for this session
+mkdir -p "$(dirname "$MARKER_FILE")"
+touch "$MARKER_FILE"
 
 # Remind the agent about available notebook tools
 echo ""

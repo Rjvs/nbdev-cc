@@ -33,13 +33,13 @@ fi
 # Find modified notebooks
 if [[ -f "$TIMESTAMP_FILE" ]]; then
     # Subsequent runs: notebooks modified since last prompt
-    MODIFIED=$(find "$NBS_DIR" -maxdepth 2 -name '*.ipynb' \
+    MODIFIED=$(find "$NBS_DIR" -name '*.ipynb' \
         -not -path '*/.ipynb_checkpoints/*' \
         -not -path '*/_proc/*' \
         -newer "$TIMESTAMP_FILE" 2>/dev/null | sort) || true
 else
     # First run: notebooks modified in the last 5 minutes
-    MODIFIED=$(find "$NBS_DIR" -maxdepth 2 -name '*.ipynb' \
+    MODIFIED=$(find "$NBS_DIR" -name '*.ipynb' \
         -not -path '*/.ipynb_checkpoints/*' \
         -not -path '*/_proc/*' \
         -mmin -5 2>/dev/null | sort) || true

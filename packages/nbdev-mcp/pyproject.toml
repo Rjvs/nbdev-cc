@@ -4,9 +4,27 @@ version = "0.1.0"
 description = "MCP server and plugin for nbdev notebook development with Claude Code"
 requires-python = ">=3.10"
 license = "Apache-2.0"
+readme = "README.md"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Text Editors :: Integrated Development Environments (IDE)",
+]
 dependencies = [
     "mcp>=1.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Rjvs/nbdev-cc"
+Repository = "https://github.com/Rjvs/nbdev-cc"
+Issues = "https://github.com/Rjvs/nbdev-cc/issues"
 
 [project.scripts]
 nbdev-mcp = "nbdev_mcp.cli:main"
