@@ -20,9 +20,9 @@ These should be fixed before any release.
 
 ## Shell injection & security
 
-- [ ] **`auto-read-notebooks.sh` has shell injection** (lines 54-55): `$MODIFIED` (filenames from `find`) is interpolated into a Python triple-quoted string `'''$MODIFIED'''`. Filenames containing quotes, backslashes, or triple-quotes will break or execute arbitrary code. Use a temporary file or pass filenames via environment variable.
-- [ ] **No path validation on MCP tool inputs**: All tools accept raw `path: str` with no sanitization. An MCP client could read/write files outside the project via path traversal (`../../etc/passwd`). Consider restricting paths to the project directory.
-- [ ] **`nb_run` executes arbitrary notebook code**: Inherent to the tool's purpose, but there's no sandboxing, confirmation, or scope restriction. Document the security implications.
+- [x] **`auto-read-notebooks.sh` has shell injection** (lines 54-55): ~~`$MODIFIED` interpolated into a Python triple-quoted string.~~ Now passes data via environment variables (`NB_MARKER`, `NB_FILES`) and uses single-quoted Python to prevent shell interpolation.
+- [x] **No path validation on MCP tool inputs**: ~~All tools accept raw `path: str` with no sanitization.~~ Added `validate_notebook_path()` and `validate_path()` helpers to `_common.py`. All tools now validate `.ipynb` extension and reject paths outside the project directory.
+- [x] **`nb_run` executes arbitrary notebook code**: ~~No documentation of security implications.~~ Added security documentation to both the module docstring and the tool function docstring.
 
 ## `nb_run` tool
 

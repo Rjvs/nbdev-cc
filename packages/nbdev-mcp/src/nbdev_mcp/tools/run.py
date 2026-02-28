@@ -3,11 +3,20 @@
 Starts a fresh kernel, executes cells sequentially, and reports outputs.
 Uses subprocess to run in the project's Python environment (since the
 MCP server runs in its own isolated env via uvx).
+
+Security note: This tool executes arbitrary code from notebook cells with
+the full permissions of the user's Python environment. There is no
+sandboxing — cell code can read/write files, make network requests, and
+run shell commands. Only run notebooks you trust. The MCP client (Claude
+Code) is expected to confirm execution with the user before calling this
+tool.
 """
 
 import os
 import subprocess
 from pathlib import Path
+
+from ._common import validate_notebook_path
 
 
 def nb_run(
@@ -25,6 +34,9 @@ def nb_run(
     Runs cells in a fresh kernel in the project's Python environment.
     Prefer --upto or --range over calling --cell in a loop.
 
+    SECURITY: This executes arbitrary code with user-level permissions.
+    No sandboxing is applied. Only run trusted notebooks.
+
     Args:
         path: Path to .ipynb file.
         cell: Execute a single cell by index.
@@ -38,11 +50,9 @@ def nb_run(
     Returns:
         Execution output text.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
-    if p.suffix != '.ipynb':
-        return f'Error: {p} is not a .ipynb file'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     # Build the command to run nb_run as a subprocess in the project env.
     # We use an inline Python script that imports nbformat/nbclient.

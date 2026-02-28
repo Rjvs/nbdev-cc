@@ -2,7 +2,54 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
+
+
+def validate_notebook_path(path, must_exist=True):
+    """Validate that a path is a .ipynb file within the working directory.
+
+    Returns (resolved_path, error_message). If error_message is not None,
+    the path is invalid and the error should be returned to the caller.
+    """
+    p = Path(path)
+
+    if must_exist and not p.exists():
+        return None, f'Error: {p} not found'
+
+    if p.suffix != '.ipynb':
+        return None, f'Error: {p} is not a .ipynb file'
+
+    # Resolve to absolute path and check it's under the working directory
+    resolved = p.resolve()
+    cwd = Path(os.getcwd()).resolve()
+    try:
+        resolved.relative_to(cwd)
+    except ValueError:
+        return None, f'Error: {p} is outside the project directory'
+
+    return resolved, None
+
+
+def validate_path(path, must_exist=True):
+    """Validate that a path is within the working directory.
+
+    Like validate_notebook_path but without the .ipynb extension check.
+    Used for spec files and directories.
+    """
+    p = Path(path)
+
+    if must_exist and not p.exists():
+        return None, f'Error: {p} not found'
+
+    resolved = p.resolve()
+    cwd = Path(os.getcwd()).resolve()
+    try:
+        resolved.relative_to(cwd)
+    except ValueError:
+        return None, f'Error: {p} is outside the project directory'
+
+    return resolved, None
 
 
 def load_notebook(path):

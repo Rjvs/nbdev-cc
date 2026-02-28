@@ -8,7 +8,7 @@ mental JSON parsing.
 import json
 from pathlib import Path
 
-from ._common import load_notebook, get_source, get_directives, classify_cell
+from ._common import load_notebook, get_source, get_directives, classify_cell, validate_notebook_path
 
 _range = range  # preserve built-in before parameter shadowing
 
@@ -150,11 +150,9 @@ def nb_read(
     Returns:
         Human-readable notebook text.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
-    if p.suffix != '.ipynb':
-        return f'Error: {p} is not a .ipynb file'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     try:
         nb = load_notebook(p)

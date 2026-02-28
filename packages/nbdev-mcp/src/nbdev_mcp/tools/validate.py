@@ -8,7 +8,7 @@ import json
 import re
 from pathlib import Path
 
-from ._common import get_source, find_notebooks
+from ._common import get_source, find_notebooks, validate_path
 
 CELL_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]+$')
 
@@ -197,6 +197,9 @@ def nb_validate(
 
     all_results = []
     for path in paths:
+        _, err = validate_path(path)
+        if err:
+            return err
         notebooks = find_notebooks(path)
         if not notebooks:
             continue

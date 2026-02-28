@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ._common import (
     load_notebook, save_notebook, get_source, source_to_array,
-    generate_cell_id, parse_spec,
+    generate_cell_id, parse_spec, validate_notebook_path, validate_path,
 )
 
 
@@ -67,16 +67,16 @@ def nb_cells_insert(
     Returns:
         Status message.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
-    spec_path = Path(from_spec)
-    if not spec_path.exists():
-        return f'Error: spec file {spec_path} not found'
+    spec_path, err = validate_path(from_spec)
+    if err:
+        return err
 
     nb = load_notebook(p)
-    new_cells = _parse_spec_file(from_spec)
+    new_cells = _parse_spec_file(spec_path)
     if not new_cells:
         return 'Error: no cells parsed from spec file'
 
@@ -115,16 +115,16 @@ def nb_cells_append(
     Returns:
         Status message.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
-    spec_path = Path(from_spec)
-    if not spec_path.exists():
-        return f'Error: spec file {spec_path} not found'
+    spec_path, err = validate_path(from_spec)
+    if err:
+        return err
 
     nb = load_notebook(p)
-    new_cells = _parse_spec_file(from_spec)
+    new_cells = _parse_spec_file(spec_path)
     if not new_cells:
         return 'Error: no cells parsed from spec file'
 
@@ -162,9 +162,9 @@ def nb_cells_move(
     Returns:
         Status message.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     nb = load_notebook(p)
     cells = nb['cells']
@@ -211,9 +211,9 @@ def nb_cells_find(
     if not pattern and not directive:
         return 'Error: provide pattern or directive'
 
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     nb = load_notebook(p)
     cells = nb['cells']
@@ -258,9 +258,9 @@ def nb_cells_remove(
     Returns:
         Status message.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     try:
         indices = sorted(set(int(x.strip()) for x in cells.split(',')), reverse=True)

@@ -7,7 +7,7 @@ scoped to a single cell, with uniqueness enforced on old string.
 import difflib
 from pathlib import Path
 
-from ._common import load_notebook, save_notebook, get_source, source_to_array
+from ._common import load_notebook, save_notebook, get_source, source_to_array, validate_notebook_path
 
 
 def _find_cell_by_match(nb, pattern):
@@ -75,9 +75,9 @@ def nb_edit(
     Returns:
         Status message describing what was changed.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     if cell is None and match is None:
         return 'Error: provide either cell (index) or match (pattern)'

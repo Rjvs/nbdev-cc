@@ -8,7 +8,7 @@ cell index, type, and classification.
 import re
 from pathlib import Path
 
-from ._common import load_notebook, get_source, get_directives, classify_cell, find_notebooks
+from ._common import load_notebook, get_source, get_directives, classify_cell, find_notebooks, validate_path
 
 
 def _match_directive(source, directive):
@@ -112,6 +112,10 @@ def nb_search(
     """
     if not pattern and not directive and not cell_type:
         return 'Error: provide at least one of pattern, directive, or cell_type'
+
+    _, err = validate_path(path)
+    if err:
+        return err
 
     notebooks = find_notebooks(path)
     if not notebooks:

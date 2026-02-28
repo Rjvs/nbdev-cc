@@ -8,7 +8,7 @@ import json
 import platform
 from pathlib import Path
 
-from ._common import source_to_array, generate_cell_id, parse_spec
+from ._common import source_to_array, generate_cell_id, parse_spec, validate_notebook_path, validate_path
 
 
 def _make_code_cell(source, index=0):
@@ -104,14 +104,16 @@ def nb_create(
     Returns:
         Status message.
     """
-    out_path = Path(out)
+    out_path, err = validate_notebook_path(out, must_exist=False)
+    if err:
+        return err
     if out_path.exists() and not force:
         return f'Error: {out_path} already exists. Use force=True to overwrite.'
 
     if from_spec:
-        spec_path = Path(from_spec)
-        if not spec_path.exists():
-            return f'Error: spec file {spec_path} not found'
+        spec_path, err = validate_path(from_spec)
+        if err:
+            return err
         with open(spec_path, 'r', encoding='utf-8') as f:
             content = f.read()
         cell_specs = parse_spec(content)

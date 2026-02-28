@@ -47,12 +47,13 @@ fi
 
 [[ -z "$MODIFIED" ]] && { mkdir -p "$(dirname "$TIMESTAMP_FILE")"; touch "$TIMESTAMP_FILE"; exit 0; }
 
-# Inline Python to extract flagged cells (no external tool dependency)
-OUTPUT=$(python3 -c "
+# Pass data via environment variables to avoid shell injection
+# (filenames with quotes/backslashes could break inline string interpolation)
+OUTPUT=$(NB_MARKER="$MARKER" NB_FILES="$MODIFIED" python3 -c '
 import json, sys, os
 
-marker = '$MARKER'
-files = '''$MODIFIED'''.strip().split('\n')
+marker = os.environ["NB_MARKER"]
+files = os.environ["NB_FILES"].strip().split("\n")
 
 output = []
 for path in files:
@@ -60,44 +61,44 @@ for path in files:
     if not path:
         continue
     try:
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             nb = json.load(f)
     except Exception:
         continue
-    cells = nb.get('cells', [])
+    cells = nb.get("cells", [])
     name = os.path.basename(path)
     for idx, cell in enumerate(cells):
-        source = cell.get('source', '')
+        source = cell.get("source", "")
         if isinstance(source, list):
-            source = ''.join(source)
+            source = "".join(source)
         if marker not in source:
             continue
-        ct = cell.get('cell_type', 'unknown').upper()
+        ct = cell.get("cell_type", "unknown").upper()
         # Classify
-        tag = ''
-        if ct == 'CODE':
-            for line in source.split('\n'):
+        tag = ""
+        if ct == "CODE":
+            for line in source.split("\n"):
                 s = line.strip()
-                if s.startswith('#|'):
+                if s.startswith("#|"):
                     d = s[2:].strip()
-                    if d.startswith('export'):
-                        tag = ' (export)'
+                    if d.startswith("export"):
+                        tag = " (export)"
                         break
-                elif s and not s.startswith('#'):
-                    tag = ' (test)'
+                elif s and not s.startswith("#"):
+                    tag = " (test)"
                     break
             if not tag:
-                tag = ' (test)'
-        header = f'=== {name} ({len(cells)} cells) ==='
-        cell_header = f'[{idx}] {ct}{tag}'
+                tag = " (test)"
+        header = f"=== {name} ({len(cells)} cells) ==="
+        cell_header = f"[{idx}] {ct}{tag}"
         lines = [cell_header]
-        for i, line in enumerate(source.split('\n'), 1):
-            lines.append(f'    {i:3d}  {line}')
-        output.append(header + '\n\n' + '\n'.join(lines))
+        for i, line in enumerate(source.split("\n"), 1):
+            lines.append(f"    {i:3d}  {line}")
+        output.append(header + "\n\n" + "\n".join(lines))
 
 if output:
-    print('\n\n'.join(output))
-" 2>/dev/null) || true
+    print("\n\n".join(output))
+' 2>/dev/null) || true
 
 if [[ -n "$OUTPUT" ]]; then
     echo "<flagged-notebook-cells>"
