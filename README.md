@@ -15,51 +15,64 @@ Gives Claude Code deep understanding of nbdev's literate programming workflow �
 | **Hooks** | `SessionStart` — installs deps in remote environments; `UserPromptSubmit` — surfaces `todo:`-flagged cells |
 | **Settings** | Hook registration via `.claude/settings.json` |
 
-## Quick start
+## Install
 
-Install into an existing nbdev project:
+### Option 1: Claude Code plugin (recommended)
 
-```bash
-# Preview what will be installed
-uvx nbdev-mcp init /path/to/project --dry-run
-
-# Install
-uvx nbdev-mcp init /path/to/project
-
-# Overwrite existing files
-uvx nbdev-mcp init /path/to/project --force
-```
-
-This copies the skill, CLAUDE.md, hooks, and settings into `.claude/`, creates `.mcp.json` with the nbdev MCP server (and optionally jupyter-mcp for live collaboration), patches `pyproject.toml` with Jupyter dependencies, and updates `.gitignore`.
-
-Then start Claude Code in your project — the skill loads automatically when working with `.ipynb` files.
-
-## Using the skills standalone
-
-The skills in `.claude/skills/` work without the MCP server. Copy them into any nbdev project's `.claude/skills/` directory:
+Install as a Claude Code plugin — skills, hooks, and MCP tools load automatically:
 
 ```bash
-cp -r .claude/skills/nbdev /path/to/project/.claude/skills/
-cp -r .claude/skills/fastcore /path/to/project/.claude/skills/
+# From a marketplace (once published):
+claude plugin install nbdev
+
+# From this repo directly:
+claude --plugin-dir /path/to/nbdev-cc
 ```
 
-Claude Code will load them when relevant based on the skill description.
+### Option 2: Init into a project
+
+Copy all plugin files directly into your project (vendors them, good for version control):
+
+```bash
+uvx nbdev-mcp init /path/to/project            # install
+uvx nbdev-mcp init /path/to/project --dry-run   # preview
+uvx nbdev-mcp init /path/to/project --force     # overwrite
+```
+
+This copies skills, CLAUDE.md, hooks, and settings into `.claude/`, creates `.mcp.json` with the nbdev MCP server (and jupyter-mcp for live collaboration), patches `pyproject.toml` with Jupyter dependencies, and updates `.gitignore`.
+
+### Option 3: Skills only
+
+Copy the skills without MCP tools or hooks:
+
+```bash
+cp -r skills/nbdev /path/to/project/.claude/skills/
+cp -r skills/fastcore /path/to/project/.claude/skills/
+```
+
+Claude Code loads them automatically when working with `.ipynb` files.
 
 ## Repository structure
 
 ```
-nbdev-cc/
-├── .claude/skills/          # Skills (also bundled in the package)
-│   ├── nbdev/               # nbdev development skill + references
-│   └── fastcore/            # fastcore API skill + references
+nbdev-cc/                        # This repo IS a Claude Code plugin
+├── .claude-plugin/plugin.json   # Plugin manifest
+├── skills/                      # Skills (auto-discovered by plugin system)
+│   ├── nbdev/                   # nbdev development skill + references
+│   └── fastcore/                # fastcore API skill + references
+├── hooks/                       # Hooks (auto-discovered by plugin system)
+│   ├── hooks.json               # Hook config with ${CLAUDE_PLUGIN_ROOT}
+│   ├── session-start.sh         # Remote environment setup
+│   └── auto-read-notebooks.sh   # todo: cell surfacing
+├── .mcp.json                    # MCP server config (nbdev + jupyter-mcp)
 └── packages/
-    └── nbdev-mcp/           # Installable package
+    └── nbdev-mcp/               # PyPI package (MCP server + init command)
         ├── src/nbdev_mcp/
-        │   ├── cli.py       # Entry point: `nbdev-mcp` / `nbdev-mcp init`
-        │   ├── init.py      # Project setup logic
-        │   ├── server.py    # MCP server (FastMCP)
-        │   ├── tools/       # Tool implementations
-        │   └── assets/      # Files copied by `init`
+        │   ├── cli.py           # Entry point: `nbdev-mcp` / `nbdev-mcp init`
+        │   ├── init.py          # Project setup (vendors assets)
+        │   ├── server.py        # MCP server (FastMCP)
+        │   ├── tools/           # Tool implementations
+        │   └── assets/          # Files copied by `init`
         └── pyproject.toml
 ```
 

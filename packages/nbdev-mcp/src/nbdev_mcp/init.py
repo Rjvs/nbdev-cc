@@ -54,6 +54,7 @@ GITIGNORE_ENTRIES = ['jupyter.log', '.claude/.last-nb-read']
 ASSET_COPIES = [
     # (source path relative to assets/, dest path relative to project root)
     ('skill', os.path.join('.claude', 'skills', 'nbdev')),
+    ('fastcore-skill', os.path.join('.claude', 'skills', 'fastcore')),
     ('CLAUDE.md', os.path.join('.claude', 'CLAUDE.md')),
     ('settings.json', os.path.join('.claude', 'settings.json')),
     (os.path.join('hooks', 'session-start.sh'), os.path.join('.claude', 'hooks', 'session-start.sh')),
@@ -157,7 +158,7 @@ def _patch_pyproject(project_dir, dry_run=False):
             for i, line in enumerate(lines):
                 if line.strip() == '[dependency-groups]':
                     j = i + 1
-                    while j < len(lines) and not (lines[j].strip().startswith('[') and not lines[j].strip().startswith('[')):
+                    while j < len(lines) and not (lines[j].strip().startswith('[') and lines[j].strip() != '[dependency-groups]'):
                         j += 1
                     jupyter_lines = [
                         'jupyter = [',
