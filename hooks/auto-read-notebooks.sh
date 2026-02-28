@@ -18,6 +18,10 @@ set -euo pipefail
 MARKER="todo:"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-.}"
 TIMESTAMP_FILE="$PROJECT_DIR/.claude/.last-nb-read"
+# Max search depth; 0 means unlimited. Override via NB_MAXDEPTH env var.
+NB_MAXDEPTH="${NB_MAXDEPTH:-0}"
+DEPTH_ARGS=()
+[[ "$NB_MAXDEPTH" -gt 0 ]] && DEPTH_ARGS=(-maxdepth "$NB_MAXDEPTH")
 
 # Detect nbs directory from settings.ini, fall back to nbs/
 NBS_DIR="$PROJECT_DIR/nbs"
@@ -33,13 +37,13 @@ fi
 # Find modified notebooks
 if [[ -f "$TIMESTAMP_FILE" ]]; then
     # Subsequent runs: notebooks modified since last prompt
-    MODIFIED=$(find "$NBS_DIR" -maxdepth 2 -name '*.ipynb' \
+    MODIFIED=$(find "$NBS_DIR" "${DEPTH_ARGS[@]}" -name '*.ipynb' \
         -not -path '*/.ipynb_checkpoints/*' \
         -not -path '*/_proc/*' \
         -newer "$TIMESTAMP_FILE" 2>/dev/null | sort) || true
 else
     # First run: notebooks modified in the last 5 minutes
-    MODIFIED=$(find "$NBS_DIR" -maxdepth 2 -name '*.ipynb' \
+    MODIFIED=$(find "$NBS_DIR" "${DEPTH_ARGS[@]}" -name '*.ipynb' \
         -not -path '*/.ipynb_checkpoints/*' \
         -not -path '*/_proc/*' \
         -mmin -5 2>/dev/null | sort) || true

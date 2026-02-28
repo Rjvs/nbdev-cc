@@ -108,27 +108,27 @@ def _copy_asset_file(src_traversable, dst, force=False, dry_run=False):
             f.write(content)
 
 
-def _write_mcp_json(project_dir, force=False, dry_run=False):
+def _write_mcp_json(project_dir, force=False, dry_run=False, no_jupyter=False):
     """Create or merge .mcp.json in the project root."""
+    servers_to_add = dict(MCP_CONFIG['mcpServers'])
+    if no_jupyter:
+        servers_to_add.pop('jupyter-mcp', None)
+
     path = os.path.join(project_dir, '.mcp.json')
     if os.path.exists(path):
         with open(path) as f:
             existing = json.load(f)
         servers = existing.get('mcpServers', {})
-        needs_update = False
-        for name in MCP_CONFIG['mcpServers']:
-            if name not in servers or force:
-                needs_update = True
-                break
+        needs_update = any(name not in servers or force for name in servers_to_add)
         if not needs_update:
-            _log(f'skip (exists): {path} already has nbdev and jupyter-mcp', dry_run)
+            _log(f'skip (exists): {path} already has required MCP servers', dry_run)
             return
-        servers.update(MCP_CONFIG['mcpServers'])
+        servers.update(servers_to_add)
         existing['mcpServers'] = servers
         config = existing
         _log(f'merge MCP servers into: {path}', dry_run)
     else:
-        config = MCP_CONFIG
+        config = {'mcpServers': servers_to_add}
         _log(f'create: {path}', dry_run)
 
     if not dry_run:
@@ -154,11 +154,18 @@ def _patch_pyproject(project_dir, dry_run=False):
     if '[dependency-groups]' in content:
         _log(f'patch: add jupyter group to {path}', dry_run)
         if not dry_run:
+            import re as _re
+            # A TOML section header is a line whose non-whitespace content is
+            # [name] or [[name]] — not an array literal which starts inside
+            # a value position. We match only top-level section lines.
+            _section_re = _re.compile(r'^\s*\[\[?[A-Za-z0-9_\-.]+\]?\]\s*$')
             lines = content.split('\n')
             for i, line in enumerate(lines):
                 if line.strip() == '[dependency-groups]':
                     j = i + 1
-                    while j < len(lines) and not (lines[j].strip().startswith('[') and lines[j].strip() != '[dependency-groups]'):
+                    while j < len(lines) and not (
+                        _section_re.match(lines[j]) and lines[j].strip() != '[dependency-groups]'
+                    ):
                         j += 1
                     jupyter_lines = [
                         'jupyter = [',
@@ -207,6 +214,15 @@ def _patch_gitignore(project_dir, dry_run=False):
                 f.write(entry + '\n')
 
 
+def _is_nbdev_project(project_dir):
+    """Return True if the directory looks like an nbdev project."""
+    has_settings = os.path.exists(os.path.join(project_dir, 'settings.ini'))
+    has_nbs = os.path.isdir(os.path.join(project_dir, 'nbs'))
+    has_pyproject = os.path.exists(os.path.join(project_dir, 'pyproject.toml'))
+    # Accept if settings.ini exists OR if both nbs/ and pyproject.toml exist
+    return has_settings or (has_nbs and has_pyproject)
+
+
 def run_init(argv):
     """Run the init command."""
     parser = argparse.ArgumentParser(
@@ -218,12 +234,22 @@ def run_init(argv):
                         help='Overwrite existing files (default: skip)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Show what would be done without making changes')
+    parser.add_argument('--no-jupyter', action='store_true',
+                        help='Skip jupyter-mcp config and dependency group')
     args = parser.parse_args(argv)
 
     project = os.path.abspath(args.project)
     if not os.path.isdir(project):
         print(f'Error: {project} is not a directory', file=sys.stderr)
         sys.exit(1)
+
+    if not _is_nbdev_project(project):
+        print(
+            f'Warning: {project} does not look like an nbdev project '
+            f'(no settings.ini or nbs/ directory found).',
+            file=sys.stderr,
+        )
+        print('Continuing anyway — pass --force to suppress this warning next time.', file=sys.stderr)
 
     print(f'Installing nbdev plugin into {project}', file=sys.stderr)
     if args.dry_run:
@@ -242,11 +268,15 @@ def run_init(argv):
         if os.path.exists(path) and not args.dry_run:
             os.chmod(path, 0o755)
 
-    # Create/merge .mcp.json
-    _write_mcp_json(project, force=args.force, dry_run=args.dry_run)
+    # Create/merge .mcp.json (optionally skip jupyter-mcp server)
+    _write_mcp_json(project, force=args.force, dry_run=args.dry_run,
+                    no_jupyter=args.no_jupyter)
 
-    # Patch pyproject.toml
-    _patch_pyproject(project, dry_run=args.dry_run)
+    # Patch pyproject.toml (optionally skip jupyter dependency group)
+    if not args.no_jupyter:
+        _patch_pyproject(project, dry_run=args.dry_run)
+    else:
+        _log('skip: jupyter dependency group (--no-jupyter)', args.dry_run)
 
     # Patch .gitignore
     _patch_gitignore(project, dry_run=args.dry_run)
@@ -254,6 +284,9 @@ def run_init(argv):
     if not args.dry_run:
         print(f'\nDone. Next steps:', file=sys.stderr)
         print(f'  1. Edit .claude/CLAUDE.md to match your project', file=sys.stderr)
-        print(f'  2. uv sync --group jupyter', file=sys.stderr)
-        print(f'  3. Start JupyterLab and set JUPYTER_TOKEN', file=sys.stderr)
-        print(f'  4. Run: claude  (with JUPYTER_TOKEN in env)', file=sys.stderr)
+        if not args.no_jupyter:
+            print(f'  2. uv sync --group jupyter', file=sys.stderr)
+            print(f'  3. Start JupyterLab and set JUPYTER_TOKEN', file=sys.stderr)
+            print(f'  4. Run: claude  (with JUPYTER_TOKEN in env)', file=sys.stderr)
+        else:
+            print(f'  2. Run: claude', file=sys.stderr)

@@ -17,5 +17,11 @@ def main():
         from .init import run_init
         run_init(sys.argv[2:])
     else:
-        from .server import mcp
-        mcp.run()
+        try:
+            from .server import mcp
+            mcp.run()
+        except KeyboardInterrupt:
+            pass
+        except Exception as e:
+            print(f'Error: MCP server failed to start: {e}', file=sys.stderr)
+            sys.exit(1)

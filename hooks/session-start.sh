@@ -3,8 +3,7 @@
 # Installs dependencies so nbdev commands, tests, and linters work in
 # Claude Code on the web.
 #
-# Copy to your project: .claude/hooks/session-start.sh
-# Register in .claude/settings.json (see template-settings.json)
+# Installed by: nbdev-mcp init (do not edit directly — re-run init to update)
 set -euo pipefail
 
 # Only run in remote (web) environments
@@ -29,9 +28,12 @@ elif [ -f "settings.ini" ] && [ -f "setup.py" ]; then
   uv pip install -e ".[dev]" 2>/dev/null || uv pip install -e .
 fi
 
-# Install nbdev and quarto if not already available
-uv pip install nbdev 2>/dev/null || true
+# Install nbdev if not already in the environment
+if ! uv run python -c "import nbdev" 2>/dev/null; then
+  uv pip install nbdev 2>/dev/null || true
+fi
 
+# Install quarto only if not already present (slow one-time operation)
 if ! command -v quarto &> /dev/null; then
   uv run nbdev_install_quarto 2>/dev/null || true
 fi

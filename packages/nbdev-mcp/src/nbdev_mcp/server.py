@@ -18,7 +18,7 @@ def nb_read(
     exports: bool = False,
     tests: bool = False,
     markdown: bool = False,
-    range: str | None = None,
+    cell_range: str | None = None,
     flag: str | None = None,
 ) -> str:
     """Human-readable notebook viewer. Use instead of Read/cat on .ipynb files.
@@ -29,7 +29,7 @@ def nb_read(
     """
     from .tools.read import nb_read as _nb_read
     return _nb_read(path, outline=outline, cell=cell, exports=exports,
-                    tests=tests, markdown=markdown, range=range, flag=flag)
+                    tests=tests, markdown=markdown, cell_range=cell_range, flag=flag)
 
 
 @mcp.tool()
@@ -144,7 +144,7 @@ def nb_run(
     path: str,
     cell: int | None = None,
     upto: int | None = None,
-    range: str | None = None,
+    cell_range: str | None = None,
     save: bool = False,
     allow_errors: bool = False,
     timeout: int = 600,
@@ -152,12 +152,12 @@ def nb_run(
 ) -> str:
     """Execute notebook cells in batch.
 
-    Starts a fresh kernel and executes cells sequentially. Prefer --upto
-    or --range over calling --cell in a loop — one call does the job.
+    Starts a fresh kernel and executes cells sequentially. Prefer upto
+    or cell_range over calling cell in a loop — one call does the job.
     Runs in the project's Python environment.
     """
     from .tools.run import nb_run as _nb_run
-    return _nb_run(path, cell=cell, upto=upto, range=range,
+    return _nb_run(path, cell=cell, upto=upto, cell_range=cell_range,
                    save=save, allow_errors=allow_errors,
                    timeout=timeout, kernel=kernel)
 
