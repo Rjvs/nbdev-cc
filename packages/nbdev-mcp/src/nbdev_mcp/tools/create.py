@@ -5,9 +5,10 @@ correct structure. Avoids error-prone manual JSON construction.
 """
 
 import json
+import platform
 from pathlib import Path
 
-from ._common import source_to_array, generate_cell_id
+from ._common import source_to_array, generate_cell_id, parse_spec
 
 
 def _make_code_cell(source, index=0):
@@ -45,7 +46,7 @@ def _make_notebook(cells):
             },
             'language_info': {
                 'name': 'python',
-                'version': '3.11.0',
+                'version': platform.python_version(),
                 'codemirror_mode': {'name': 'ipython', 'version': 3},
                 'file_extension': '.py',
                 'mimetype': 'text/x-python',
@@ -54,41 +55,6 @@ def _make_notebook(cells):
         },
         'cells': cells,
     }
-
-
-def _parse_spec(content):
-    """Parse cell spec text into (cell_type, source) tuples."""
-    cells = []
-    parts = content.split('\n---')
-
-    for part in parts:
-        part = part.strip()
-        if not part:
-            continue
-
-        lines = part.split('\n', 1)
-        cell_type = lines[0].strip().lower()
-
-        if cell_type not in ('code', 'markdown', 'raw'):
-            if ' ' in cell_type:
-                parts2 = cell_type.split(None, 1)
-                if parts2[0] == '---':
-                    cell_type = parts2[1] if len(parts2) > 1 else ''
-                else:
-                    continue
-            else:
-                continue
-
-        if cell_type not in ('code', 'markdown', 'raw'):
-            continue
-
-        source = lines[1] if len(lines) > 1 else ''
-        if source.startswith('\n'):
-            source = source[1:]
-
-        cells.append((cell_type, source))
-
-    return cells
 
 
 def _validate_notebook(nb):
@@ -148,7 +114,7 @@ def nb_create(
             return f'Error: spec file {spec_path} not found'
         with open(spec_path, 'r', encoding='utf-8') as f:
             content = f.read()
-        cell_specs = _parse_spec(content)
+        cell_specs = parse_spec(content)
         cells = []
         for i, (cell_type, source) in enumerate(cell_specs):
             if cell_type == 'code':

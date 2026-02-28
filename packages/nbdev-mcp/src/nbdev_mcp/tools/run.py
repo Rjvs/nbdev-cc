@@ -7,7 +7,6 @@ MCP server runs in its own isolated env via uvx).
 
 import os
 import subprocess
-import sys
 from pathlib import Path
 
 
@@ -55,7 +54,8 @@ def nb_run(
 
     for cmd in [
         ['uv', 'run', 'python', '-c', script],
-        [sys.executable, '-c', script],
+        ['python3', '-c', script],
+        ['python', '-c', script],
     ]:
         try:
             result = subprocess.run(

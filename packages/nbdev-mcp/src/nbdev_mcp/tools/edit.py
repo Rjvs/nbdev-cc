@@ -4,6 +4,7 @@ Use instead of Edit/Write on .ipynb files. Works on cell content directly,
 scoped to a single cell, with uniqueness enforced on old string.
 """
 
+import difflib
 from pathlib import Path
 
 from ._common import load_notebook, save_notebook, get_source, source_to_array
@@ -38,26 +39,15 @@ def _find_cell_by_match(nb, pattern):
 
 
 def _make_diff(old_source, new_source, cell_idx):
-    """Create a simple diff display."""
-    old_lines = old_source.split('\n')
-    new_lines = new_source.split('\n')
-
-    lines = [f'--- cell [{cell_idx}] (before)', f'+++ cell [{cell_idx}] (after)']
-
-    max_lines = max(len(old_lines), len(new_lines))
-    for i in range(max_lines):
-        old_line = old_lines[i] if i < len(old_lines) else None
-        new_line = new_lines[i] if i < len(new_lines) else None
-
-        if old_line == new_line:
-            lines.append(f'  {old_line}')
-        else:
-            if old_line is not None:
-                lines.append(f'- {old_line}')
-            if new_line is not None:
-                lines.append(f'+ {new_line}')
-
-    return '\n'.join(lines)
+    """Create a unified diff display using difflib."""
+    old_lines = old_source.splitlines(keepends=True)
+    new_lines = new_source.splitlines(keepends=True)
+    diff = difflib.unified_diff(
+        old_lines, new_lines,
+        fromfile=f'cell [{cell_idx}] (before)',
+        tofile=f'cell [{cell_idx}] (after)',
+    )
+    return ''.join(diff).rstrip('\n')
 
 
 def nb_edit(

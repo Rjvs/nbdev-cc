@@ -110,31 +110,12 @@ def nb_cells(
     - find: Find cells by pattern or directive
     - remove: Remove cells by index (requires cells as comma-separated indices)
     """
-    if action == 'insert':
-        if not from_spec:
-            return 'Error: from_spec is required for insert'
-        from .tools.cells import nb_cells_insert
-        return nb_cells_insert(path, from_spec=from_spec, at=at, dry_run=dry_run)
-    elif action == 'append':
-        if not from_spec:
-            return 'Error: from_spec is required for append'
-        from .tools.cells import nb_cells_append
-        return nb_cells_append(path, from_spec=from_spec, dry_run=dry_run)
-    elif action == 'move':
-        if from_pos is None or to_pos is None:
-            return 'Error: from_pos and to_pos are required for move'
-        from .tools.cells import nb_cells_move
-        return nb_cells_move(path, from_pos=from_pos, to_pos=to_pos, dry_run=dry_run)
-    elif action == 'find':
-        from .tools.cells import nb_cells_find
-        return nb_cells_find(path, pattern=pattern, directive=directive)
-    elif action == 'remove':
-        if not cells:
-            return 'Error: cells (comma-separated indices) is required for remove'
-        from .tools.cells import nb_cells_remove
-        return nb_cells_remove(path, cells=cells, dry_run=dry_run)
-    else:
-        return f'Error: unknown action "{action}". Use: insert, append, move, find, remove'
+    from .tools.cells import nb_cells_dispatch
+    return nb_cells_dispatch(
+        path, action=action, at=at, from_spec=from_spec,
+        from_pos=from_pos, to_pos=to_pos, cells=cells,
+        pattern=pattern, directive=directive, dry_run=dry_run,
+    )
 
 
 @mcp.tool()

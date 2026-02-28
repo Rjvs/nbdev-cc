@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import time
 from pathlib import Path
 
 
@@ -15,7 +14,7 @@ def load_notebook(path):
 def save_notebook(nb, path):
     """Save notebook to file, matching nbdev's JSON formatting."""
     with open(path, 'w', encoding='utf-8') as f:
-        json.dump(nb, f, indent=1, ensure_ascii=False)
+        json.dump(nb, f, indent=1, ensure_ascii=False, sort_keys=True)
         f.write('\n')
 
 
@@ -83,9 +82,48 @@ def classify_cell(cell):
 
 
 def generate_cell_id(index=0, content=''):
-    """Generate a unique, deterministic cell ID."""
-    seed = f'{index}:{content[:50]}:{time.time_ns()}'
+    """Generate a deterministic cell ID from index and content."""
+    seed = f'{index}:{content[:50]}'
     return hashlib.sha256(seed.encode()).hexdigest()[:8]
+
+
+def parse_spec(content):
+    """Parse cell spec text into (cell_type, source) tuples.
+
+    Spec format: cells separated by ``\\n---``, each starting with a type
+    line (``code``, ``markdown``, or ``raw``) followed by the source.
+    """
+    cells = []
+    parts = content.split('\n---')
+
+    for part in parts:
+        part = part.strip()
+        if not part:
+            continue
+
+        lines = part.split('\n', 1)
+        cell_type = lines[0].strip().lower()
+
+        if cell_type not in ('code', 'markdown', 'raw'):
+            if ' ' in cell_type:
+                parts2 = cell_type.split(None, 1)
+                if parts2[0] == '---':
+                    cell_type = parts2[1] if len(parts2) > 1 else ''
+                else:
+                    continue
+            else:
+                continue
+
+        if cell_type not in ('code', 'markdown', 'raw'):
+            continue
+
+        source = lines[1] if len(lines) > 1 else ''
+        if source.startswith('\n'):
+            source = source[1:]
+
+        cells.append((cell_type, source))
+
+    return cells
 
 
 def find_notebooks(path):

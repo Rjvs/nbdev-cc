@@ -10,13 +10,13 @@ The core plugin works — 8 MCP tools, nbdev/fastcore skills, hooks, and `init` 
 
 These should be fixed before any release.
 
-- [ ] **`generate_cell_id` is not deterministic** (`_common.py:87`): Docstring says "deterministic" but the seed includes `time.time_ns()`, making IDs different on every call. This breaks reproducibility and would make tests flaky. Remove the timestamp or rename to drop the "deterministic" claim.
-- [ ] **`_parse_spec` is copy-pasted** between `create.py:59` and `cells.py:16` — identical 30-line function. Move to `_common.py`.
-- [ ] **`nb_run` falls back to `sys.executable`** (`run.py:58`): The MCP server runs in its own uvx sandbox, so `sys.executable` is the MCP server's Python, not the project's. The fallback should try `python3` or `python` from PATH instead.
-- [ ] **`nb_create` hardcodes Python 3.11.0** in notebook metadata (`create.py:48`): `'version': '3.11.0'` is baked into every created notebook regardless of the actual Python version. Either detect it or omit the field.
-- [ ] **`save_notebook` may produce noisy diffs against nbdev** (`_common.py:16`): Uses `indent=1` (correct) but doesn't set `sort_keys=True`, which nbdev does. Notebooks saved by the MCP tools will have different key ordering than `nbdev_export`, causing spurious git diffs.
-- [ ] **`nb_cells` action dispatching is in `server.py`** (`server.py:113-137`): Business logic (action routing, parameter validation, error messages) lives in the server layer instead of the tool module. Should be a single `nb_cells()` dispatcher in `cells.py`.
-- [ ] **`_make_diff` is naive** (`edit.py:40-60`): Line-by-line positional comparison — if lines are inserted or deleted, all subsequent lines show as changed. Consider using `difflib`.
+- [x] **`generate_cell_id` is not deterministic** (`_common.py:87`): ~~Docstring says "deterministic" but the seed includes `time.time_ns()`, making IDs different on every call.~~ Removed timestamp from seed — IDs are now deterministic based on index and content.
+- [x] **`_parse_spec` is copy-pasted** between `create.py:59` and `cells.py:16`: ~~identical 30-line function.~~ Moved to `_common.py` as `parse_spec()`, both modules now import it.
+- [x] **`nb_run` falls back to `sys.executable`** (`run.py:58`): ~~The MCP server runs in its own uvx sandbox, so `sys.executable` is the MCP server's Python.~~ Fallback now tries `python3` then `python` from PATH.
+- [x] **`nb_create` hardcodes Python 3.11.0** in notebook metadata (`create.py:48`): ~~`'version': '3.11.0'` baked in.~~ Now uses `platform.python_version()`.
+- [x] **`save_notebook` may produce noisy diffs against nbdev** (`_common.py:16`): ~~Doesn't set `sort_keys=True`.~~ Added `sort_keys=True` to match nbdev's formatting.
+- [x] **`nb_cells` action dispatching is in `server.py`** (`server.py:113-137`): ~~Business logic lived in the server layer.~~ Moved to `nb_cells_dispatch()` in `cells.py`.
+- [x] **`_make_diff` is naive** (`edit.py:40-60`): ~~Line-by-line positional comparison.~~ Replaced with `difflib.unified_diff`.
 
 ## Shell injection & security
 
