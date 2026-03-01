@@ -548,3 +548,124 @@ Saved nbs/00_core.ipynb
 **`dry_run` availability** — All write operations support `dry_run=True`: `nb_edit`, `nb_cell_move`, `nb_cell_copy`, `nb_cell_add`, `nb_cell_split`, `nb_cell_merge`, `nb_cell_delete`.
 
 **File-based vs Jupyter-dependent** — The following work without a running Jupyter server: `nb_glob`, `nb_read`, `nb_grep`, `nb_create`. All other `nb_*` and `jupy_*` tools require Jupyter.
+
+---
+
+## Built-in Tool Reference
+
+The nbdev-mcp tools are designed so their UX matches Claude's built-in tools. This section documents those built-ins for readers who may not be familiar with them.
+
+---
+
+### `Read` — Read a file
+
+Returns file content with line numbers. Handles plain text, source code, images (rendered visually), PDFs (with page ranges), and Jupyter notebooks.
+
+```
+file_path: str             # Absolute path to the file (required)
+offset: int | None         # Line number to start reading from (default: beginning of file)
+limit: int | None          # Maximum number of lines to return (default: up to 2000)
+pages: str | None          # Page range for PDFs, e.g. "1-5" (PDF files only)
+```
+
+Modes:
+- **Full file**: `Read file_path` — returns the whole file with `cat -n` style line numbers
+- **Partial**: `Read file_path offset=50 limit=30` — returns lines 50–79, like a windowed view
+- **Metadata / special types**: `Read image.png` — shows the image visually rather than raw bytes; `Read doc.pdf pages="1-3"` — renders PDF pages
+
+`nb_read` maps to this: no args = full notebook; `cell`/`range` = partial read; `outline`/`info` = metadata-style summary.
+
+---
+
+### `Write` — Write a file
+
+Creates a new file or completely overwrites an existing one. Always use `Read` before `Write` on an existing file.
+
+```
+file_path: str    # Absolute path to write (required)
+content: str      # Full content to write (required)
+```
+
+No modes — always writes the entire content. For targeted edits to an existing file, use `Edit` instead.
+
+`nb_create` maps to this: creates a new `.ipynb` file with valid notebook structure.
+
+---
+
+### `Edit` — Find-and-replace in a file
+
+Replaces an exact string in a file. The key constraint: `old_string` must appear **exactly once** in the file (unless `replace_all=True`). This forces the caller to be specific enough to identify a unique location, avoiding accidental edits.
+
+```
+file_path: str        # Absolute path to the file (required)
+old_string: str       # Exact text to find — must be unique in the file (required)
+new_string: str       # Replacement text — can be empty to delete (required)
+replace_all: bool     # Replace every occurrence instead of requiring uniqueness (default: False)
+```
+
+Usage patterns:
+- **Replace**: `old_string="foo" new_string="bar"` — replaces one occurrence
+- **Insert before a line**: `old_string="anchor\n" new_string="new_line\nanchor\n"` — include the anchor in both strings
+- **Insert after a line**: `old_string="anchor\n" new_string="anchor\nnew_line\n"`
+- **Delete content**: `old_string="text_to_remove\n" new_string=""` — empty `new_string` removes the matched text
+- **Multi-replace**: set `replace_all=True` when the pattern is intentionally repeated
+
+`nb_edit` maps to this exactly, scoped to one notebook cell. `nb_cell_delete` maps to the structural equivalent (removing the whole cell, not just its content).
+
+---
+
+### `Bash` — Run a shell command
+
+Executes a shell command and returns its output. Claude uses this for anything that requires running a process: installing packages, running tests, managing git, starting/stopping services.
+
+```
+command: str                  # Shell command to execute (required)
+timeout: int | None           # Timeout in milliseconds (default: 120000 / 2 minutes; max: 600000)
+run_in_background: bool       # Run without waiting for output (default: False)
+description: str              # Human-readable description of what the command does
+```
+
+Resource lifecycle pattern: when Claude creates a resource with Bash (a temp file with `mktemp`, a background process, a server), it tracks that resource and cleans it up when done — removing the file, killing the process, stopping the server. `nb_open`/`nb_close` follow this same pattern.
+
+`nb_run` maps to this for cell execution. `jupy_install`, `jupy_connect`, `nb_kernel_restart`, `nb_open`, and `nb_close` also follow the Bash resource-management pattern.
+
+---
+
+### `Glob` — Find files by name pattern
+
+Lists files matching a glob pattern, sorted by modification time (most recent first). Use for finding files when you know the naming pattern but not the exact path.
+
+```
+pattern: str       # Glob pattern to match, e.g. "**/*.py" or "src/**/*.ts" (required)
+path: str | None   # Directory to search in (default: current working directory)
+```
+
+Returns: matching file paths, one per line, sorted by modification time descending. Returns an error if no files match.
+
+`nb_glob` maps to this with `Glob("**/*.ipynb")` semantics, adding notebook-aware sorting and checkpoint exclusion. `jupy_kernels` serves the same *discovery* purpose but for kernel specs rather than filesystem paths.
+
+---
+
+### `Grep` — Search file content by regex
+
+Searches for a regex pattern in files, returning matches with file path and line number. The `path` argument determines scope: a directory searches all files within it recursively; a file path searches within that file only.
+
+```
+pattern: str                  # Regex pattern to search for (required)
+path: str | None              # File or directory to search (default: current working directory)
+-i / ignore_case: bool        # Case-insensitive matching (default: False)
+output_mode: str              # "content" — show matching lines (default)
+                              # "files_with_matches" — show only file paths (like grep -l)
+                              # "count" — show match counts per file
+context: int | None           # Lines of context around each match, before and after (like grep -C)
+-A: int | None                # Lines of context after each match only (like grep -A)
+-B: int | None                # Lines of context before each match only (like grep -B)
+glob: str | None              # Filter files by glob pattern, e.g. "*.py" (within the search path)
+type: str | None              # Filter by file type, e.g. "py", "ts", "rust"
+multiline: bool               # Match patterns across line boundaries (default: False)
+head_limit: int               # Limit output to first N results (default: unlimited)
+```
+
+Returns: matching lines in `file:line_number:content` format, or just file paths with `files_with_matches`.
+
+`nb_grep` maps to this exactly. The `path` scope rule is identical: directory → multi-file search, file → within-file search. The notebook-specific `cell`/`range`, `cell_type`, and `directive` parameters are additions on top of the core Grep interface.
