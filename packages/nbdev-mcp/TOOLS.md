@@ -559,7 +559,7 @@ The nbdev-mcp tools are designed so their UX matches Claude's built-in tools. Th
 
 ### `Read` — Read a file
 
-Returns file content with line numbers. Handles plain text, source code, images (rendered visually), PDFs (with page ranges), and Jupyter notebooks.
+Returns file content with line numbers. The output format is determined automatically by file extension — there is no explicit mode parameter to request different output types.
 
 ```
 file_path: str             # Absolute path to the file (required)
@@ -568,12 +568,17 @@ limit: int | None          # Maximum number of lines to return (default: up to 2
 pages: str | None          # Page range for PDFs, e.g. "1-5" (PDF files only)
 ```
 
-Modes:
-- **Full file**: `Read file_path` — returns the whole file with `cat -n` style line numbers
-- **Partial**: `Read file_path offset=50 limit=30` — returns lines 50–79, like a windowed view
-- **Metadata / special types**: `Read image.png` — shows the image visually rather than raw bytes; `Read doc.pdf pages="1-3"` — renders PDF pages
+**Partial reads** (`offset` / `limit`): `Read file_path offset=50 limit=30` returns lines 50–79, like a windowed view into the file. Omit both for a full read.
 
-`nb_read` maps to this: no args = full notebook; `cell`/`range` = partial read; `outline`/`info` = metadata-style summary.
+**Automatic file-type handling** — no parameter required, triggered by extension:
+- **Text / source code**: plain content with `cat -n` style line numbers
+- **Images** (`.png`, `.jpg`, etc.): rendered visually for Claude to analyze; no text returned
+- **PDFs** (`.pdf`): requires `pages` for files over 10 pages (e.g. `pages="1-5"`); max 20 pages per call
+- **Jupyter notebooks** (`.ipynb`): parses cells and outputs into readable form
+
+There is no "metadata-only" mode in `Read` — you always get the content, not just file attributes.
+
+`nb_read` takes inspiration from `Read`'s partial-read pattern (`cell`/`range` ≈ `offset`/`limit`) but adds notebook-specific modes (`outline`, `info`) that have no direct `Read` equivalent.
 
 ---
 
