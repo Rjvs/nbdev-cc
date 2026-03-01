@@ -553,11 +553,13 @@ Saved nbs/00_core.ipynb
 
 ## Built-in Tool Reference
 
-The nbdev-mcp tools are designed so their UX matches Claude's built-in tools. This section documents those built-ins for readers who may not be familiar with them.
+The nbdev-mcp tools are designed so their UX matches Claude's built-in tools. This section documents those built-ins for readers who may not be familiar with them. See the [Claude Code documentation](https://code.claude.com/docs/en/how-claude-code-works) for the authoritative tools overview; individual tool reference pages exist for some tools but not all.
 
 ---
 
 ### `Read` — Read a file
+
+*No dedicated reference page. See the [Claude Code tools overview](https://code.claude.com/docs/en/how-claude-code-works); the underlying concept is also documented as the [Text Editor Tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/text-editor-tool) in the Claude API docs.*
 
 Returns file content with line numbers. The output format is determined automatically by file extension — there is no explicit mode parameter to request different output types.
 
@@ -584,6 +586,8 @@ There is no "metadata-only" mode in `Read` — you always get the content, not j
 
 ### `Write` — Write a file
 
+*No dedicated reference page. See the [Claude Code tools overview](https://code.claude.com/docs/en/how-claude-code-works); the underlying concept is also documented as the [Text Editor Tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/text-editor-tool) in the Claude API docs.*
+
 Creates a new file or completely overwrites an existing one. Always use `Read` before `Write` on an existing file.
 
 ```
@@ -598,6 +602,8 @@ No modes — always writes the entire content. For targeted edits to an existing
 ---
 
 ### `Edit` — Find-and-replace in a file
+
+*No dedicated reference page. See the [Claude Code tools overview](https://code.claude.com/docs/en/how-claude-code-works); the underlying concept is also documented as the [Text Editor Tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/text-editor-tool) in the Claude API docs.*
 
 Replaces an exact string in a file. The key constraint: `old_string` must appear **exactly once** in the file (unless `replace_all=True`). This forces the caller to be specific enough to identify a unique location, avoiding accidental edits.
 
@@ -621,6 +627,8 @@ Usage patterns:
 
 ### `Bash` — Run a shell command
 
+*[Bash Tool reference](https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool) — Claude API docs. Also see the [Claude Code tools overview](https://code.claude.com/docs/en/how-claude-code-works).*
+
 Executes a shell command and returns its output. Claude uses this for anything that requires running a process: installing packages, running tests, managing git, starting/stopping services.
 
 ```
@@ -638,6 +646,8 @@ Resource lifecycle pattern: when Claude creates a resource with Bash (a temp fil
 
 ### `Glob` — Find files by name pattern
 
+*No dedicated reference page. See the [Claude Code tools overview](https://code.claude.com/docs/en/how-claude-code-works).*
+
 Lists files matching a glob pattern, sorted by modification time (most recent first). Use for finding files when you know the naming pattern but not the exact path.
 
 ```
@@ -652,6 +662,8 @@ Returns: matching file paths, one per line, sorted by modification time descendi
 ---
 
 ### `Grep` — Search file content by regex
+
+*No dedicated reference page. See the [Claude Code tools overview](https://code.claude.com/docs/en/how-claude-code-works).*
 
 Searches for a regex pattern in files, returning matches with file path and line number. The `path` argument determines scope: a directory searches all files within it recursively; a file path searches within that file only.
 
