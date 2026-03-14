@@ -9,43 +9,8 @@ from pathlib import Path
 
 from ._common import (
     load_notebook, save_notebook, get_source, source_to_array,
-    generate_cell_id,
+    generate_cell_id, parse_spec, validate_notebook_path, validate_path,
 )
-
-
-def _parse_spec(content):
-    """Parse cell spec text into (cell_type, source) tuples."""
-    cells = []
-    parts = content.split('\n---')
-
-    for part in parts:
-        part = part.strip()
-        if not part:
-            continue
-
-        lines = part.split('\n', 1)
-        cell_type = lines[0].strip().lower()
-
-        if cell_type not in ('code', 'markdown', 'raw'):
-            if ' ' in cell_type:
-                parts2 = cell_type.split(None, 1)
-                if parts2[0] == '---':
-                    cell_type = parts2[1] if len(parts2) > 1 else ''
-                else:
-                    continue
-            else:
-                continue
-
-        if cell_type not in ('code', 'markdown', 'raw'):
-            continue
-
-        source = lines[1] if len(lines) > 1 else ''
-        if source.startswith('\n'):
-            source = source[1:]
-
-        cells.append((cell_type, source))
-
-    return cells
 
 
 def _make_cell(cell_type, source, index=0):
@@ -66,7 +31,7 @@ def _parse_spec_file(path):
     """Parse a spec file and return cell dicts."""
     with open(path, 'r', encoding='utf-8') as f:
         content = f.read()
-    specs = _parse_spec(content)
+    specs = parse_spec(content)
     return [_make_cell(ct, src, i) for i, (ct, src) in enumerate(specs)]
 
 
@@ -102,16 +67,16 @@ def nb_cells_insert(
     Returns:
         Status message.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
-    spec_path = Path(from_spec)
-    if not spec_path.exists():
-        return f'Error: spec file {spec_path} not found'
+    spec_path, err = validate_path(from_spec)
+    if err:
+        return err
 
     nb = load_notebook(p)
-    new_cells = _parse_spec_file(from_spec)
+    new_cells = _parse_spec_file(spec_path)
     if not new_cells:
         return 'Error: no cells parsed from spec file'
 
@@ -150,16 +115,16 @@ def nb_cells_append(
     Returns:
         Status message.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
-    spec_path = Path(from_spec)
-    if not spec_path.exists():
-        return f'Error: spec file {spec_path} not found'
+    spec_path, err = validate_path(from_spec)
+    if err:
+        return err
 
     nb = load_notebook(p)
-    new_cells = _parse_spec_file(from_spec)
+    new_cells = _parse_spec_file(spec_path)
     if not new_cells:
         return 'Error: no cells parsed from spec file'
 
@@ -197,9 +162,9 @@ def nb_cells_move(
     Returns:
         Status message.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     nb = load_notebook(p)
     cells = nb['cells']
@@ -246,9 +211,9 @@ def nb_cells_find(
     if not pattern and not directive:
         return 'Error: provide pattern or directive'
 
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     nb = load_notebook(p)
     cells = nb['cells']
@@ -293,9 +258,9 @@ def nb_cells_remove(
     Returns:
         Status message.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     try:
         indices = sorted(set(int(x.strip()) for x in cells.split(',')), reverse=True)
@@ -327,3 +292,41 @@ def nb_cells_remove(
     save_notebook(nb, p)
     lines.append(f'Saved {p}')
     return '\n'.join(lines)
+
+
+def nb_cells_dispatch(
+    path: str,
+    action: str,
+    at: int | None = None,
+    from_spec: str | None = None,
+    from_pos: int | None = None,
+    to_pos: int | None = None,
+    cells: str | None = None,
+    pattern: str | None = None,
+    directive: str | None = None,
+    dry_run: bool = False,
+) -> str:
+    """Dispatch bulk cell operations by action name.
+
+    Actions: insert, append, move, find, remove.
+    """
+    if action == 'insert':
+        if not from_spec:
+            return 'Error: from_spec is required for insert'
+        return nb_cells_insert(path, from_spec=from_spec, at=at, dry_run=dry_run)
+    elif action == 'append':
+        if not from_spec:
+            return 'Error: from_spec is required for append'
+        return nb_cells_append(path, from_spec=from_spec, dry_run=dry_run)
+    elif action == 'move':
+        if from_pos is None or to_pos is None:
+            return 'Error: from_pos and to_pos are required for move'
+        return nb_cells_move(path, from_pos=from_pos, to_pos=to_pos, dry_run=dry_run)
+    elif action == 'find':
+        return nb_cells_find(path, pattern=pattern, directive=directive)
+    elif action == 'remove':
+        if not cells:
+            return 'Error: cells (comma-separated indices) is required for remove'
+        return nb_cells_remove(path, cells=cells, dry_run=dry_run)
+    else:
+        return f'Error: unknown action "{action}". Use: insert, append, move, find, remove'

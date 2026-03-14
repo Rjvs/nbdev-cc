@@ -18,7 +18,7 @@ def nb_read(
     exports: bool = False,
     tests: bool = False,
     markdown: bool = False,
-    range: str | None = None,
+    cell_range: str | None = None,
     flag: str | None = None,
 ) -> str:
     """Human-readable notebook viewer. Use instead of Read/cat on .ipynb files.
@@ -29,7 +29,7 @@ def nb_read(
     """
     from .tools.read import nb_read as _nb_read
     return _nb_read(path, outline=outline, cell=cell, exports=exports,
-                    tests=tests, markdown=markdown, range=range, flag=flag)
+                    tests=tests, markdown=markdown, cell_range=cell_range, flag=flag)
 
 
 @mcp.tool()
@@ -110,31 +110,12 @@ def nb_cells(
     - find: Find cells by pattern or directive
     - remove: Remove cells by index (requires cells as comma-separated indices)
     """
-    if action == 'insert':
-        if not from_spec:
-            return 'Error: from_spec is required for insert'
-        from .tools.cells import nb_cells_insert
-        return nb_cells_insert(path, from_spec=from_spec, at=at, dry_run=dry_run)
-    elif action == 'append':
-        if not from_spec:
-            return 'Error: from_spec is required for append'
-        from .tools.cells import nb_cells_append
-        return nb_cells_append(path, from_spec=from_spec, dry_run=dry_run)
-    elif action == 'move':
-        if from_pos is None or to_pos is None:
-            return 'Error: from_pos and to_pos are required for move'
-        from .tools.cells import nb_cells_move
-        return nb_cells_move(path, from_pos=from_pos, to_pos=to_pos, dry_run=dry_run)
-    elif action == 'find':
-        from .tools.cells import nb_cells_find
-        return nb_cells_find(path, pattern=pattern, directive=directive)
-    elif action == 'remove':
-        if not cells:
-            return 'Error: cells (comma-separated indices) is required for remove'
-        from .tools.cells import nb_cells_remove
-        return nb_cells_remove(path, cells=cells, dry_run=dry_run)
-    else:
-        return f'Error: unknown action "{action}". Use: insert, append, move, find, remove'
+    from .tools.cells import nb_cells_dispatch
+    return nb_cells_dispatch(
+        path, action=action, at=at, from_spec=from_spec,
+        from_pos=from_pos, to_pos=to_pos, cells=cells,
+        pattern=pattern, directive=directive, dry_run=dry_run,
+    )
 
 
 @mcp.tool()
@@ -163,7 +144,7 @@ def nb_run(
     path: str,
     cell: int | None = None,
     upto: int | None = None,
-    range: str | None = None,
+    cell_range: str | None = None,
     save: bool = False,
     allow_errors: bool = False,
     timeout: int = 600,
@@ -171,12 +152,12 @@ def nb_run(
 ) -> str:
     """Execute notebook cells in batch.
 
-    Starts a fresh kernel and executes cells sequentially. Prefer --upto
-    or --range over calling --cell in a loop — one call does the job.
+    Starts a fresh kernel and executes cells sequentially. Prefer upto
+    or cell_range over calling cell in a loop — one call does the job.
     Runs in the project's Python environment.
     """
     from .tools.run import nb_run as _nb_run
-    return _nb_run(path, cell=cell, upto=upto, range=range,
+    return _nb_run(path, cell=cell, upto=upto, cell_range=cell_range,
                    save=save, allow_errors=allow_errors,
                    timeout=timeout, kernel=kernel)
 

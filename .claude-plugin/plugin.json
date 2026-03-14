@@ -1,0 +1,11 @@
+{
+  "name": "nbdev",
+  "version": "0.1.0",
+  "description": "Claude Code plugin for nbdev — literate programming in Jupyter notebooks. Provides skills, MCP tools, and hooks for working with nbdev projects.",
+  "author": {
+    "name": "Rjvs"
+  },
+  "repository": "https://github.com/Rjvs/nbdev-cc",
+  "license": "Apache-2.0",
+  "keywords": ["nbdev", "jupyter", "notebooks", "literate-programming", "fastcore"]
+}

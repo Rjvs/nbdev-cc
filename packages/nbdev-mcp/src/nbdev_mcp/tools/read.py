@@ -8,9 +8,9 @@ mental JSON parsing.
 import json
 from pathlib import Path
 
-from ._common import load_notebook, get_source, get_directives, classify_cell
+from ._common import load_notebook, get_source, get_directives, classify_cell, validate_notebook_path
 
-_range = range  # preserve built-in before parameter shadowing
+_range = range  # alias so we can use range() after the parameter is defined
 
 
 def _get_default_exp(nb):
@@ -132,7 +132,7 @@ def nb_read(
     exports: bool = False,
     tests: bool = False,
     markdown: bool = False,
-    range: str | None = None,
+    cell_range: str | None = None,
     flag: str | None = None,
 ) -> str:
     """Read a notebook in human-readable format.
@@ -144,17 +144,15 @@ def nb_read(
         exports: Show only exported cells.
         tests: Show only test cells (non-exported code).
         markdown: Show only markdown cells.
-        range: Cell range like '2-5'.
+        cell_range: Cell range like '2-5'.
         flag: Show only cells containing this marker (e.g. 'todo:').
 
     Returns:
         Human-readable notebook text.
     """
-    p = Path(path)
-    if not p.exists():
-        return f'Error: {p} not found'
-    if p.suffix != '.ipynb':
-        return f'Error: {p} is not a .ipynb file'
+    p, err = validate_notebook_path(path)
+    if err:
+        return err
 
     try:
         nb = load_notebook(p)
@@ -176,12 +174,12 @@ def nb_read(
     elif flag:
         cell_filter = f'flag:{flag}'
 
-    cell_range = None
-    if range:
+    parsed_range = None
+    if cell_range:
         try:
-            cell_range = _parse_range(range)
+            parsed_range = _parse_range(cell_range)
         except (ValueError, IndexError):
-            return f'Error: Invalid range format "{range}". Use e.g. 2-5'
+            return f'Error: Invalid range format "{cell_range}". Use e.g. 2-5'
 
     # Build output
     lines = []
@@ -196,8 +194,8 @@ def nb_read(
             indices = [cell]
         else:
             return f'Error: cell index {cell} out of range (0-{len(cells)-1})'
-    elif cell_range is not None:
-        start, end = cell_range
+    elif parsed_range is not None:
+        start, end = parsed_range
         start = max(0, start)
         end = min(len(cells) - 1, end)
         indices = _range(start, end + 1)
